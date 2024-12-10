@@ -90,52 +90,6 @@ demand_i = np.zeros(len(L))
 for i in range(len(L)):  
     demand_i[i] = sum(Dp_array[p] * delta_matrix[i,p] for p in range(len(P)))  # Summing demand over all paths
 
-# %%
-# Parameters
-average_fares = df_itineraries.groupby(['Origin', 'Destination'])['Price [EUR]'].mean()
-fare = average_fares.to_dict() # Average fare for itinerary p
-Dp = df_itineraries.groupby(['Origin', 'Destination'])['Demand'].sum() # Daily unconstrained demand for itinerary p
-CAPi = df_flights['Capacity'] # Capacity on flight (leg) i
-b = df_recapture['Recapture Rate'] # Recapture rate of a pax that desires itinerary p and is allocated to r
-itinerary_flights = df_itineraries['Itinerary']
-
-# Computing binary variable delta[i, p] for checking if leg i is in path p
-L_list = df_flights['Flight No.'].tolist() 
-flight1 = df_itineraries['Flight 1']
-flight2 = df_itineraries['Flight 2']
-delta_matrix = np.zeros((len(P), len(L)))
-
-# Making delta[i, p] matrix
-for i in range(len(L)):
-    for j in range(len(P)):
-        if flight1[j] == L_list[i]:
-            delta_matrix[i][j] = 1
-        if flight2[j] == L_list[i]:
-            delta_matrix[i][j] = 1
-
-# Zet delta_matrix om naar een DataFrame voor export
-delta_df = pd.DataFrame(delta_matrix, index=Dp, columns=L_list)
-print(delta_df.to_string())
-
-# Exporteer naar Excel
-output_file = "delta_matrix.xlsx"
-delta_df.to_excel(output_file, index_label="Path", sheet_name="Delta Matrix")
-
-print(f"Delta matrix succesvol opgeslagen in: {output_file}")
-
-
-# Vraag per pad (direct uit de DataFrame halen)
-Dp = df_itineraries['Demand'].tolist()
-
-# Berekening van de vraag per vlucht
-demand_i = np.zeros(len(L))  # Dit gaat de vraag per vlucht bevatten
-
-for i in L:  # Itereren over alle vluchten
-    demand_i[i] = sum(Dp[p] * delta_matrix[p, i] for p in range(len(Dp)))  # Som van de vraag gewogen door delta_matrix
-
-# Output de vraag per vlucht
-print("Vraag per vlucht (demand_i):")
-print(demand_i)
 # delta = {}
 # for _, row in df_itineraries.iterrows():
 #     itinerary = row['Itinerary']
