@@ -51,7 +51,7 @@ print(df_recapture)
 
 # Sets
 L = set(df_flights['Flight No.']) # Set of flights
-P = set(df_itineraries[['Flight 1', 'Flight 2']].itertuples(index=False, name=None)) # Set of passenger itineraries (paths)
+P = set(df_itineraries['Itinerary'])
 P_p = set(df_recapture[['From Itinerary', 'To Itinerary']].itertuples(index=False, name=None)) # Set of passenger itineraries (paths) with recapture from itinerary p
 
 print("Set of Flights:", L)
@@ -61,7 +61,8 @@ print("Set of passenger itineraries (paths) with recapture from itinerary p", P_
 #%%
 # Parameters
 average_fares = df_itineraries.groupby(['Origin', 'Destination'])['Price [EUR]'].mean()
-fare = average_fares.to_dict() # Average fare for itinerary p
+averagefare = average_fares.to_dict() # Average fare for itinerary p
+fare = df_itineraries['Price [EUR]']
 Dp = df_itineraries.groupby(['Origin', 'Destination'])['Demand'].sum() # Daily unconstrained demand for itinerary p
 CAPi = df_flights['Capacity'] # Capacity on flight (leg) i
 b = df_recapture['Recapture Rate'] # Recapture rate of a pax that desires itinerary p and is allocated to r
@@ -90,121 +91,53 @@ demand_i = np.zeros(len(L))
 for i in range(len(L)):  
     demand_i[i] = sum(Dp_array[p] * delta_matrix[i,p] for p in range(len(P)))  # Summing demand over all paths
 
-# delta = {}
-# for _, row in df_itineraries.iterrows():
-#     itinerary = row['Itinerary']
-#     if pd.notna(row['Flight 1']):  # If Flight 1 is not NaN, add to delta
-#         delta[(row['Flight 1'], itinerary)] = 1
-#     if pd.notna(row['Flight 2']):  # If Flight 2 is not NaN, add to delta
-#         delta[(row['Flight 2'], itinerary)] = 1  # Flight-path inclusion
-
-# #%%
-# # Define δp as a dictionary: (itinerary, flight) -> 1 if flight is part of the itinerary, else 0
-# delta = {
-#     (itinerary, flight): 1 if flight in flights else 0
-#     for itinerary, flights in itinerary_flights.items()  # Iterate over each itinerary and its flights
-#     for flight in df_flights['Flight No.'].unique()  # Iterate over all unique flights in df_flights
-# }
-
-# print("Delta Mapping (δp):")
-# print(δp)
-
-# %%
-# Parameters
-average_fares = df_itineraries.groupby(['Origin', 'Destination'])['Price [EUR]'].mean()
-fare = average_fares.to_dict() # Average fare for itinerary p
-Dp = df_itineraries.groupby(['Origin', 'Destination'])['Demand'].sum() # Daily unconstrained demand for itinerary p
-CAPi = df_flights['Capacity'] # Capacity on flight (leg) i
-b = df_recapture['Recapture Rate'] # Recapture rate of a pax that desires itinerary p and is allocated to r
-itinerary_flights = df_itineraries['Itinerary']
-
-# Computing binary variable delta[i, p] for checking if leg i is in path p
-L_list = df_flights['Flight No.'].tolist() 
-flight1 = df_itineraries['Flight 1'].tolist()
-flight2 = df_itineraries['Flight 2'].tolist()
-delta_matrix = np.zeros((len(L_list), len(flight1)))
-
-for i in range(len(L_list)):
-    for j in range(len(flight1)):
-        if flight1[j] == L_list[i] or flight2[j] == L_list[i]:
-            delta_matrix[i][j] = 1
-'
-print("Delta matrix:")
-for row in delta_matrix:
-    print(row)
-
-# Vraag per pad (direct uit de DataFrame halen)
-Dp = df_itineraries['Demand'].tolist()
+#Computing the recapture rate b_pr
+recapture_p_list = df_recapture['From Itinerary']
+recapture_r_list = df_recapture['To Itinerary']
+rate = df_recapture['Recapture Rate']
+bpr = {(p,r): rate for p, r, rate in zip(recapture_p_list, recapture_r_list, rate)}
 
 
-# Berekening van de vraag per vlucht
-demand_i = np.zeros(len(L))  # Dit gaat de vraag per vlucht bevatten
+# Initial Restricted Master problem 
+# Decision Variables
+t = {}           # Number of passengers from itinerary p that will travel on itinerary r
+for p in P:
+    for r in P:
+        t[p,r] = m.addVar(lb=0,vtype=GRB.INTEGER)
 
-for i, flight in enumerate(L):  # Itereren over alle vluchten
-    demand_i[i] = sum(Dp[p] * delta_matrix[p, i] for p in range(len(P)))  # Som van de vraag gewogen door delta_matrix
+# Set objective of minimizing spill costs
+m.setObjective(
+    quicksum(fare[p] * t[p, r] for p in P for r in P),
+    GRB.MINIMIZE
+)
+m.update()
 
-# Output de vraag per vlucht
-print("Vraag per vlucht (demand_i):")
-print(demand_i)
-# delta = {}
-# for _, row in df_itineraries.iterrows():
-#     itinerary = row['Itinerary']
-#     if pd.notna(row['Flight 1']):  # If Flight 1 is not NaN, add to delta
-#         delta[(row['Flight 1'], itinerary)] = 1
-#     if pd.notna(row['Flight 2']):  # If Flight 2 is not NaN, add to delta
-#         delta[(row['Flight 2'], itinerary)] = 1  # Flight-path inclusion
+##Constraints 
+#Capacity constraint
+for i in L: 
+    m.addConstr(quicksum(delta_matrix[i][p] * t[p, r] for p in P for r in P) 
+                - quicksum(delta_matrix[i][p] * t[r, p] for p in P for r in P)
+                >= demand_i[i] - CAPi[i])
+    
+#Demand constraint
+for p in P:
+    m.addConstr(quicksum(t[p, r] for r in P_p) <= Dp[p])
 
-# #%%
-# # Define δp as a dictionary: (itinerary, flight) -> 1 if flight is part of the itinerary, else 0
-# delta = {
-#     (itinerary, flight): 1 if flight in flights else 0
-#     for itinerary, flights in itinerary_flights.items()  # Iterate over each itinerary and its flights
-#     for flight in df_flights['Flight No.'].unique()  # Iterate over all unique flights in df_flights
-# }
 
-# print("Delta Mapping (δp):")
-# print(δp)
+# terminate_iteration = False
+# iteration_count = 0
+
+# added_columns = []
+# columns = []
+
+# while not terminate_iteration and iteration_count < 20:
+#     print('n\nStart new iteration')
+#     start_time = time.time()
+
+
+
+
+
+
 
 # %%
-demand
-
-# %%
-demand_i
-
-# %%
-for i, flight in enumerate(L):  # Itereren over alle vluchten
-    demand_i[i] = sum(Dp[p] * delta_matrix[p, i] for p in range(len(P)))  # Som van de vraag gewogen door delta_matrix
-
-# %%
-demand
-
-# %%
-demand_i
-
-# %%
-len(demand_i)
-
-# %%
-Dp
-
-# %%
-for i in L:  # Itereren over alle vluchten
-    demand_i[i] = sum(Dp[p] * delta_matrix[p, i] for p in range(len(P)))  # Som van de vraag gewogen door delta_matrix
-
-# %%
-for i in range(len(L)):  # Itereren over alle vluchten
-    demand_i[i] = sum(Dp[p] * delta_matrix[p, i] for p in range(len(P)))  # Som van de vraag gewogen door delta_matrix
-
-# %%
-deman
-
-# %%
-demand_i
-
-# %%
-DELTA
-
-# %%
-delta_matrix
-
-
