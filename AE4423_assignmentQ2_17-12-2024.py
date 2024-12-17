@@ -155,129 +155,6 @@ p_i_dict[422] = [] # Add empty list of legs for the fictitious itinerary
 # Set initial set for r in all reallocation options to the fictitious only
 P_initial = [422]
 
-#%% Decision Variables, objective, constraints
-t = {}           # Number of passengers from itinerary p that will travel on itinerary r
-for p in P_i:
-    for r in P_i:
-        t[p,r] = m2.addVar(lb=0,vtype=GRB.CONTINUOUS)
-
-# Set objective of minimizing spill costs
-m2.setObjective(
-    quicksum((fare_i[p] - bpr[p, r] * fare_i[r]) * t[p, r] for p in P_i for r in P_initial),
-    GRB.MINIMIZE
-)
-# Capacity constraint
-for i in L: 
-    m2.addConstr(
-        quicksum(delta_matrix[i][p] * t[p, r] for p in P_i for r in P_initial)
-        - quicksum(delta_matrix[i][p] * bpr[r, p] * t[r, p] for p in P_i for r in P_initial)
-        >= demand_i[i] - CAPi[i],
-        name=f'CAP_{i}'
-    )
-
-# Demand constraint
-for p in P_i:
-    m2.addConstr(
-        quicksum(t[p, r] for r in P_initial) <= Dp[p],
-        name=f'D_{p}'
-    )
-#Run initial model
-m2.update()
-m2.optimize()
-
-model_state_initial = m2.status
-
-if model_state_initial == GRB.Status.UNBOUNDED:
-    print('The model is unbounded')
-
-elif model_state_initial == GRB.Status.OPTIMAL or True:
-    initial_objective = m2.objVal
-    print('Results of initial RMP')
-    print('\nInitial objective function value: \t %g' % initial_objective)
-
-t_values = [] # list for t values
-for key, var in t.items(): 
-    if var.X != 0: # Collect non zero values from t[p,r]
-        t_values.append((key[0], key[1], var.X))  # Add the p and r values
-
-# Make dataframe for t values
-df_t_values = pd.DataFrame(t_values, columns=["from itinerary p", "to fictitious", "Value"])
-
-# Print t table for initial solution
-print('\nThe t[p,r] of the initial solution of the RMP')
-print(df_t_values)
-  
-#%% Restricted master problem iterations
-
-# terminate_iteration = False
-# iteration_count = 0
-
-# added_columns = []
-# existing_columns = []
-# P_initial = P_i
-
-# while not terminate_iteration and iteration_count < 20:
-#     print('n\nStart new iteration')
-    
-#     m2.optimize()
-#     m2_relaxed = m2.relax()
-#     m2_relaxed.optimize()
-#     m2.setParam('OutputFlag', 0)
-
-#     # Generate duals of capacity and demand constraint
-#     dual_CAP = [c.pi for c in m2_relaxed.getConstrs() if c.ConstrName.startswith('CAP_')]
-#     dual_D = [c.pi for c in m2_relaxed.getConstrs() if c.ConstrName.startswith('D_')]
-
-#     # Calculating reduced cost C_pr'
-#     reduced_costs = {(p, r): (fare_i[p] - sum(dual_CAP[i] for i in itinerary_dict[p]) 
-#                                 - bpr[p, r] * (fare_i[r] - sum(dual_CAP[i] for i in itinerary_dict[r])) 
-#                                 - dual_D[p] ) for p in P_i for r in P_i}
-#     # Columns with negative dual value
-#     negative_columns = [(p, r) for p in P_i for r in P_i if (p, r) not in existing_columns and reduced_costs[p, r] < -0.0001]
-
-#     for n in negative_columns:
-#         new_column = Column()
-#         for b in itinerary_dict[n[0]]:
-#             new_column.addTerms(delta_matrix[b][n[0]] - delta_matrix[b][n[1]] * bpr[n[0], n[1]], m2.getConstrByName('CAP_'%(b)))
-#         new_column.addTerms(1, m2.getConstrByName("D_"%(n[0])))
-
-#         t[n[0], n[1]] = m2.addVar(obj=fare_i[n[0]] - bpr[n[0], n[1]] * fare_i[n[1]], lb=0, vtype=GRB.INTEGER, column=new_column)
-#         added_columns.append((n[0], n[1]))
-#         existing_columns.append((n[0], n[1]))
-
-#     m2.update()
-
-#     if all(reduced_costs[p, r] >= 0 for p, r in negative_columns):
-#         terminate_iteration = True
-#         print('exit')
-
-#     iteration_count += 1
-
-#     print(f'\nCOUNT #{iteration_count}')
-#     print(f'Number of negative reduced costs      = {len(negative_columns)}')
-#     print('\nColumns with negative reduced costs')
-#     print(negative_columns)
-#     print('..........')
-#     print(f'\nColumns added in COUNT #{iteration_count}:')
-#     print(added_columns)
-#     print(f'#: {len(added_columns)}')
-#     print('..........')
-#     if iteration_count != 0:
-#         print('\nColumns already added:')
-#         print(existing_columns)
-#         print(len(existing_columns))
-#     print('----------------------------------------------------------------------------------------------------\n')
-
-# m2.optimize()
-# model_status_after_iteration = m2.status
-
-# if model_status_after_iteration == GRB.Status.UNBOUNDED:
-#     print('The model cannot be solved because it is unbounded')
-
-# elif model_status_after_iteration == GRB.Status.OPTIMAL or True:
-#     f_objective = m2.objVal
-#     print('--------------------------- RESULTS -------------------------')
-#     print('\nObjective Function Value: \t %g' % f_objective)
 
 # %% Restricted master problem with intial solution included
 terminate_iteration = False
@@ -287,7 +164,7 @@ columns = []
 # Decision variable: number of reallocated pax from itinerary p to r 
 t = {} 
 for p in P_i:
-    for r in P_initial:
+    for r in P_i:
         t[p,r] = m2.addVar(lb=0,vtype=GRB.CONTINUOUS)
 
 # Objective function: minimizing spill costs
@@ -335,10 +212,7 @@ if iteration_count == 0:
     print(df_t_values)
 print(f'\nCOUNT #{iteration_count}')
 
-# Adjust P_initial to P_i for following iterations
-# if iteration_count >= 1:
-#     P_initial = P_i  
-
+#%% Generating new columns
 # Calculate duals of constraints
 dual_CAP = [c.pi for c in m2.getConstrs() if c.ConstrName.startswith('CAP_')]
 dual_D = [c.pi for c in m2.getConstrs() if c.ConstrName.startswith('D_')]
@@ -352,14 +226,15 @@ for key, value in reduced_costs.items():
     if value < 0:
         print(f"{key}: {value}")
 
-# Voeg (key[0], key[1]) toe aan 'columns' voor elke key in reduced_costs
+# Add (key[0], key[1]) to 'columns' for each key in reduced costs
 for key, value in reduced_costs.items():
     if value < 0:
         columns.append((key[0], key[1]))  # Voeg (key[0], key[1]) toe 
 
-# Zet de lijst om naar een DataFrame
-# columns_df = pd.DataFrame(columns)
+# 
 columns_df = pd.DataFrame(columns, columns = ["p", "r"])
+
+#%% Second iteration Restricted Master Problem
 
 # Decision variable: number of reallocated pax from itinerary p to r 
 t = {} 
@@ -382,63 +257,25 @@ for i in L:
     m2.addConstr(
         quicksum(delta_matrix[i][columns_df.iloc[n,0]] * t[columns_df.iloc[n,0], columns_df.iloc[n,1]] 
                  for n in range(len(columns_df)))
-        - quicksum(delta_matrix[i][columns_df.iloc[n,0]] * bpr[columns_df.iloc[n,1], columns_df.iloc[n,0]] * t[columns_df.iloc[n,1], columns_df.iloc[n,0]] 
+        - quicksum(delta_matrix[i][columns_df.iloc[n,0]] * bpr[columns_df.iloc[n,1], columns_df.iloc[n,0]] 
+                   * t[columns_df.iloc[n,1], columns_df.iloc[n,0]] 
                    for n in range(len(columns_df)))
         >= demand_i[i] - CAPi[i],
         name=f'CAP_{i}'
     )
-
-# Demand constraint
-for p in P_i:
-    columns_df_filter = columns_df[columns_df["p"] == p]
-    r_list = columns_df_filter["r"].tolist()
-
-for p in P_i:
+    
+#Demand constraint
+for p in P:
+        p_r_df_filter = columns_df[columns_df["p"] == p]
+        r_list = p_r_df_filter["r"].tolist()
+        print(r_list)
+            
+for p in P:
     m2.addConstr(
-        quicksum(t[p, r] for r in r_list) <= Dp[p],
-        name=f'D_{p}'
-    )
+        quicksum(t[p, r] for r in r_list) <= Dp[p], 
+        name = "constraint5_{}".format(p))
+
 # Run model
 m2.optimize()
-
-
-#     # Columns with negative reduced cost
-#     negative_columns = [(p, r) for p in P_i for r in P_i if (p, r) not in existing_columns and reduced_costs[p, r] < -0.0001]
-
-#     # Add columns with negative reduces cost value to t keys
-#     for n in negative_columns:
-#         new_column = Column()
-#         for b in p_i_dict[n[0]]:
-#             new_column.addTerms(delta_matrix[b][n[0]] - delta_matrix[b][n[1]] * bpr[n[0], n[1]], m2.getConstrByName(f'CAP_{b}'))
-#         new_column.addTerms(1, m2.getConstrByName(f'D_{n[0]}'))
-
-#         t[n[0], n[1]] = m2.addVar(obj=fare_i[n[0]] - bpr[n[0], n[1]] * fare_i[n[1]], lb=0, vtype=GRB.INTEGER, column=new_column)
-#         added_columns.append((n[0], n[1]))
-#         existing_columns.append((n[0], n[1]))
-
-#     # Stop running when all no negative reduced costs exists
-#     if all(reduced_costs[p, r] >= 0 for p, r in negative_columns):
-#         terminate_iteration = True
-#         print('exit')
-
-#     print(f'Number of negative reduced costs = {len(negative_columns)}')
-#     print(f'#: {len(added_columns)}')
-
-#     # Adjust iteration count
-#     iteration_count += 1
-#     print(f'\nCOUNT #{iteration_count}')
-
-
-# # Optimal solution after iterations
-# m2.optimize()
-# model_status_after_iteration = m2.status
-
-# if model_status_after_iteration == GRB.Status.UNBOUNDED:
-#     print('The model cannot be solved because it is unbounded')
-
-# elif model_status_after_iteration == GRB.Status.OPTIMAL or True:
-#     f_objective = m2.objVal
-#     print('\nObjective Function Value: \t %g' % f_objective)
-
 
 # %%
