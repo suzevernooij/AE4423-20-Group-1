@@ -149,17 +149,15 @@ P_initial = [422]
 
 
 
-
-# %% Restricted master problem with intial solution included
-
-
-terminate_iteration = False
+# %% 
+# Iterations Restricted Master Problem 
+terminate_iteration = False # if true stop iterations
 iteration_count = 0
 
-columns = []   
+columns = [] #empty list of columns for column generations iterations
 
-while not terminate_iteration and iteration_count < 20:
-    if iteration_count == 0:
+while not terminate_iteration and iteration_count < 5:
+    if iteration_count == 0: #run initial model in first iteration
         # Decision variable: number of reallocated pax from itinerary p to r 
         t = {} 
         for p in P_i:
@@ -210,18 +208,16 @@ while not terminate_iteration and iteration_count < 20:
 
         iteration_count += 1
 
-    else:
+    else: #run model for from second iteration on
         # Calculate duals of constraints
-        # Verkrijg de duale waarden van de CAP- en D-constrainten
         dual_CAP = [c.pi for c in m2.getConstrs() if c.ConstrName.startswith('CAP_')]
         dual_D = [c.pi for c in m2.getConstrs() if c.ConstrName.startswith('D_')]
 
-        # # Doorloop de duale waarden in dual_CAP en controleer ze
+        # Print non null dual variables
         # for i, dual_value in enumerate(dual_CAP): 
         #     if dual_value != 0 and dual_value != -0:
         #         print(i, dual_value)
 
-        # # Doorloop de duale waarden in dual_CAP en controleer ze
         # for i, dual_value in enumerate(dual_D): 
         #     if dual_value != 0 and dual_value != -0:
         #         print(i, dual_value)
@@ -230,7 +226,8 @@ while not terminate_iteration and iteration_count < 20:
         reduced_costs = {(p, r): (fare_i[p] - sum(dual_CAP[i] for i in p_i_dict[p]) 
                                     - bpr[p, r] * (fare_i[r] - sum(dual_CAP[i] for i in p_i_dict[r])) 
                                     - dual_D[p] ) for p in P_i for r in P_i}
-
+       
+        # Print negative reduced costs keys with value
         for key, value in reduced_costs.items():
             if value < 0:
                 print(f"{key}: {value}")
@@ -238,15 +235,16 @@ while not terminate_iteration and iteration_count < 20:
         # Add (key[0], key[1]) to 'columns' for each key in reduced costs
         for key, value in reduced_costs.items():
             if value < 0:
-                columns.append((key[0], key[1]))  # Voeg (key[0], key[1]) toe 
+                if (key[0], key[1]) not in columns:  # add only if not already in columns
+                    columns.append((key[0], key[1]))  
 
-        # 
+        # Make Dataframe of columns for next itearition
         columns_df = pd.DataFrame(columns, columns = ["p", "r"])
 
+        # Stop iteration if no more negative reduced costs exists 
         if all(reduced_costs[p, r] >= 0 for p, r in columns_df.itertuples(index=False)):
             terminate_iteration = True
             print('exit')
-
 
         # iteration Restricted Master Problem
         # Decision variable: number of reallocated pax from itinerary p to r 
@@ -295,13 +293,12 @@ while not terminate_iteration and iteration_count < 20:
         for key, var in t.items(): 
             if var.X != 0: # Collect non zero values from t[p,r]
                 t_values.append((key[0], key[1], var.X))  # Add the p and r values
-                columns.append((key[0], key[1]))  # Voeg een dictionary toe
 
         # Make dataframe for t values
         df_t_values = pd.DataFrame(t_values, columns=["from itinerary p", "to itinerary r", "Value"])
 
         # Print t table
-        print(f'\nThe t[p,r] of the solution of the {itaterion_count} iteration of the RMP')
+        print(f'\nThe t[p,r] of the solution of the {iteration_count} iteration of the RMP')
         print(df_t_values)
 
         # for i in range(len(df_t_values)):
