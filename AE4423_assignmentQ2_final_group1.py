@@ -208,7 +208,31 @@ while not terminate_iteration and iteration_count < 5: #Looping til optimal solu
     if iteration_count >= 5 and not terminate_iteration:
         print("\nMaximum number of iterations reached. Termination.")
 
-# Print Total runtime
+# Compute Total runtime
 end_time = time.time()
 total_runtime = end_time - start_time
+
+# Compute the load for each itinerary p
+load_p = [] 
+for p in range(len(P_i)):
+    total_outflow = quicksum(t[(p, r)].X if (p, r) in t else 0 for r in P_i)
+    total_inflow = quicksum(t[(r, p)].X * bpr.get((r, p), 0) if (r, p) in t else 0 for r in P_i)
+    load_p.append(Dp[p] - total_outflow + total_inflow)
+
+# Compute the load for each flight leg i
+flight_load = []
+for i in range(len(L)):
+    load_value = quicksum(load_p[p] * delta_matrix[i, p] for p in range(len(P_i)))
+    flight_load.append(load_value)
+
+# Calculate the load factor for each flight leg i
+load_factor = []
+for i in range(len(L)):
+    load_factor.append(flight_load[i]/CAPi[i])
+
+# Calculate average load factor
+avg_load_factor = quicksum(load_factor[i] for i in range(len(L))) / len(L)
+
+# Print output optimal solution
 print(f"Total runtime of columng generation algorithm: {total_runtime}")
+print(f"Average load factor: {avg_load_factor}")
