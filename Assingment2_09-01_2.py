@@ -28,6 +28,9 @@ fleet_data = r"C:\Users\suzev\OneDrive\Documents\Master\AE4423-20 Airline Planni
 demand_data = r"C:\Users\suzev\OneDrive\Documents\Master\AE4423-20 Airline Planning and Optimisation\Assignment 2\AE4423Ass2\Group1.xlsx"
 
 #import data Maaike
+airport_data = r"C:\Users\Marjan\Documents\Study\AE44232o Airline planning and optimisation\Assignment 2\AE4423Ass2\AirportData.xlsx"
+fleet_data = r"C:\Users\Marjan\Documents\Study\AE44232o Airline planning and optimisation\Assignment 2\AE4423Ass2\FleetType.xlsx"
+demand_data = r"C:\Users\Marjan\Documents\Study\AE44232o Airline planning and optimisation\Assignment 2\AE4423Ass2\Group1.xlsx"
 
 # #import data Julia
 # airport_data = r"C:\TIL\Jaar 2\Airline Planning\Opdracht2\AE4423Ass2\AirportData.xlsx"
